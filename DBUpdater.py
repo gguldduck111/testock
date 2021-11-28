@@ -1,6 +1,10 @@
 import pandas as pd
 from bs4 import BeautifulSoup
-import urllib, pymysql, calendar, time, json
+import urllib
+import pymysql
+import calendar
+import time
+import json
 import urllib.request as urllib
 from datetime import datetime
 from threading import Timer
@@ -38,6 +42,22 @@ class DBUpdater:
                 PRIMARY KEY (code, date)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """
             curs.execute(sql)
+
+            sql = """
+            CREATE TABLE IF NOT EXISTS company_annual_finance_info (
+                code VARCHAR(20),
+                date VARCHAR(10),
+                type char(1),
+                open BIGINT(20),
+                high BIGINT(20),
+                low BIGINT(20),
+                close BIGINT(20),
+                diff BIGINT(20),
+                volume BIGINT(20),
+                PRIMARY KEY (code, date)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """
+            curs.execute(sql)
+
         self.conn.commit()
         self.codes = dict()
 
@@ -77,7 +97,7 @@ class DBUpdater:
                     curs.execute(sql)
                     self.codes[code] = company
                     tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
-                    print(f"[{tmnow}] #{idx + 1:04d} REPLACE INTO company_info " \
+                    print(f"[{tmnow}] #{idx + 1:04d} REPLACE INTO company_info "
                           f"VALUES ({code}, {company}, {today})")
                 self.conn.commit()
                 print('')
@@ -98,7 +118,8 @@ class DBUpdater:
 
             df = pd.DataFrame()
             pages = min(int(lastPage), pages_to_fetch)
-            print(pages);exit;
+            print(pages)
+            exit
             for page in range(1, pages + 1):
                 pageUrl = '{}&page={}'.format(siseUrl, page)
                 response = opener.open(pageUrl)
@@ -107,8 +128,8 @@ class DBUpdater:
                 print('[{}] {} ({}) : {:04d}/{:04d} pages are downloading...'.
                       format(tmnow, company, code, page, pages), end="\r")
 
-            df = df.rename(columns={'날짜': 'date', '종가': 'close', '전일비': 'diff'
-                , '시가': 'open', '고가': 'high', '저가': 'low', '거래량': 'volume'})
+            df = df.rename(columns={'날짜': 'date', '종가': 'close', '전일비': 'diff',
+                           '시가': 'open', '고가': 'high', '저가': 'low', '거래량': 'volume'})
             df['date'] = df['date'].replace('.', '-')
             df = df.dropna()
             df[['close', 'diff', 'open', 'high', 'low', 'volume']] = df[
@@ -136,8 +157,8 @@ class DBUpdater:
                       f"{r.diff}, {r.volume}, {r.institution}, {r.foreigner})"
                 curs.execute(sql)
             self.conn.commit()
-            print('[{}] #{:04d} {} ({}) : {} rows > REPLACE INTO daily_' \
-                  'price [OK]'.format(datetime.now().strftime('%Y-%m-%d' \
+            print('[{}] #{:04d} {} ({}) : {} rows > REPLACE INTO daily_'
+                  'price [OK]'.format(datetime.now().strftime('%Y-%m-%d'
                                                               ' %H:%M'), num + 1, company, code, len(df)))
 
     def update_daily_price(self, pages_to_fetch):
@@ -166,8 +187,10 @@ class DBUpdater:
         df = pd.DataFrame()
         df = df.append(pd.read_html(response, encoding='euc-kr')[1])
         df = df.fillna(0)
-        df = df.rename(columns={'종목명': 'name', '현재가': 'close', '전일비': 'different', '거래량': 'volume'})
-        df[['close', 'different', 'volume']] = df[['close', 'different', 'volume']].astype(np.int64)
+        df = df.rename(
+            columns={'종목명': 'name', '현재가': 'close', '전일비': 'different', '거래량': 'volume'})
+        df[['close', 'different', 'volume']] = df[[
+            'close', 'different', 'volume']].astype(np.int64)
         df['date'] = date
         df.head(5)
         df = df[['date', 'name', 'close', 'different', 'volume']]
@@ -219,7 +242,8 @@ class DBUpdater:
         print("Waiting for next update ({}) ... ".format(tmnext.strftime
                                                          ('%Y-%m-%d %H:%M')))
         t.start()
-    def read_institution_foreigner(self,code):
+
+    def read_institution_foreigner(self, code):
         opener = urllib.build_opener()
         opener.addheaders = [('User-agent', 'Mozilla/5.0')]
         pageUrl = f'https://finance.naver.com/item/frgn.nhn?code={code}'
@@ -227,21 +251,27 @@ class DBUpdater:
         df = pd.DataFrame()
         df = df.append(pd.read_html(response, encoding='euc-kr')[2])
         df = df.fillna(0)
-        df = df.rename(columns={'날짜': 'date', '기관': 'institution', '외국인': 'foreigner', '순매매량': 'buy'})
+        df = df.rename(
+            columns={'날짜': 'date', '기관': 'institution', '외국인': 'foreigner', '순매매량': 'buy'})
         df = df[['date', 'institution', 'foreigner']]
         return_df = pd.DataFrame(columns=['date', 'institution', 'foreigner'])
         for r in df.itertuples():
             if r[1] != 0:
                 date = r[1]
-                institution_tmp = r[2].replace('+', '') if type(r[2]) != float else int(r[2])
-                foreigner_tmp = r[3].replace('+', '') if type(r[3]) != float else int(r[3])
-                institution = np.int64(institution_tmp.replace(',', '')) if type(institution_tmp) != int else institution_tmp
-                foreigner = np.int64(foreigner_tmp.replace(',', '')) if type(foreigner_tmp) != int else foreigner_tmp
+                institution_tmp = r[2].replace(
+                    '+', '') if type(r[2]) != float else int(r[2])
+                foreigner_tmp = r[3].replace(
+                    '+', '') if type(r[3]) != float else int(r[3])
+                institution = np.int64(institution_tmp.replace(',', '')) if type(
+                    institution_tmp) != int else institution_tmp
+                foreigner = np.int64(foreigner_tmp.replace(',', '')) if type(
+                    foreigner_tmp) != int else foreigner_tmp
                 tmp_list = [date, institution, foreigner]
                 a_series = pd.Series(tmp_list, index=return_df.columns)
                 return_df = return_df.append(a_series, ignore_index=True)
         return_df = return_df.shift()[1:]
         return return_df
+
 
 if __name__ == '__main__':
     dbu = DBUpdater()
